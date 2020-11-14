@@ -1,0 +1,2 @@
+[workspace]
+members = ["tonlib", "tonlib-sys"]

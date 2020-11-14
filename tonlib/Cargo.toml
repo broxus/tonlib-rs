@@ -1,0 +1,11 @@
+[package]
+name = "tonlib-rs"
+version = "0.1.0"
+authors = ["Ivan Kalinin <i.kalinin@dexpa.io>"]
+edition = "2018"
+
+[dependencies]
+ton_api = { git = "https://github.com/broxus/ton-labs-tl.git" }
+
+[build-dependencies.tonlib-sys]
+path = "../tonlib-sys"
