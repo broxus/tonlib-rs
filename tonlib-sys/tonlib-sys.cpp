@@ -6,9 +6,9 @@
 #include <tonlib/TonlibClient.h>
 
 namespace {
-auto fetch_tl_function(void *query_ptr, uint64_t query_len)
+auto fetch_tl_function(const void *query_ptr, uint64_t query_len)
     -> td::Result<tonlib_api::object_ptr<tonlib_api::Function>> {
-  td::BufferSlice data{reinterpret_cast<char *>(query_ptr),
+  td::BufferSlice data{reinterpret_cast<const char *>(query_ptr),
                        static_cast<size_t>(query_len)};
 
   td::TlBufferParser p(&data);
@@ -123,14 +123,19 @@ auto trs_create_client() -> void * {
 }
 
 void trs_delete_client(void *client_ptr) {
-  delete reinterpret_cast<trs::Client *>(client_ptr);
+  delete reinterpret_cast<const trs::Client *>(client_ptr);
 }
 
-void trs_run(void *client_ptr, void *query_ptr, uint64_t query_len) {
+auto trs_run(void *client_ptr, const void *query_ptr, uint64_t query_len)
+    -> ExecutionResult {
   auto *client = reinterpret_cast<trs::Client *>(client_ptr);
+  auto query = fetch_tl_function(query_ptr, query_len);
+
+  // TODO
+  return ExecutionResult{nullptr, 0};
 }
 
-auto trs_execute(void *query_ptr, uint64_t query_len) -> ExecutionResult {
+auto trs_execute(const void *query_ptr, uint64_t query_len) -> ExecutionResult {
   auto query = fetch_tl_function(query_ptr, query_len);
 
   tonlib_api::object_ptr<tonlib_api::Object> R;
@@ -142,7 +147,7 @@ auto trs_execute(void *query_ptr, uint64_t query_len) -> ExecutionResult {
   return store_tl_object(std::move(R));
 }
 
-void trs_delete_response(ExecutionResult *response) {
-  delete[] reinterpret_cast<char *>(response->data_ptr);
+void trs_delete_response(const ExecutionResult *response) {
+  delete[] reinterpret_cast<const char *>(response->data_ptr);
 }
 }
