@@ -7,48 +7,6 @@ use ton_api::{BoxedDeserialize, Deserializer, Function, Serializer};
 
 use crate::errors::*;
 
-#[repr(C)]
-struct ExecutionResult {
-    data_ptr: *const c_void,
-    data_len: c_ulong,
-}
-
-type Callback = unsafe extern "C" fn(*mut c_void, ExecutionResult);
-
-#[link(name = "tonlib-sys-cpp-bundled", kind = "static")]
-extern "C" {
-    fn trs_create_client() -> *mut c_void;
-    fn trs_delete_client(client: *mut c_void);
-
-    fn trs_run(client: *mut c_void, query_ptr: *const c_void, query_len: u64, callback: Callback, context: *mut c_void);
-    fn trs_execute(query_ptr: *const c_void, query_len: u64) -> ExecutionResult;
-    fn trs_delete_response(response: *const ExecutionResult);
-}
-
-struct ExecutionResultHandle(ExecutionResult);
-
-impl ExecutionResultHandle {
-    fn parse<T>(self) -> TonlibResult<T>
-    where
-        T: BoxedDeserialize,
-    {
-        let mut buf = std::io::Cursor::new(self.as_slice());
-        Deserializer::new(&mut buf)
-            .read_boxed()
-            .map_err(|e| TonlibError::DeserializationError { reason: e.to_string() })
-    }
-
-    fn as_slice(&self) -> &[u8] {
-        unsafe { std::slice::from_raw_parts(self.0.data_ptr as *const u8, self.0.data_len as usize) }
-    }
-}
-
-impl Drop for ExecutionResultHandle {
-    fn drop(&mut self) {
-        unsafe { trs_delete_response(&self.0) };
-    }
-}
-
 pub struct TonlibClient(*mut c_void);
 
 impl TonlibClient {
@@ -92,6 +50,48 @@ impl Drop for TonlibClient {
     }
 }
 
+struct ExecutionResultHandle(ExecutionResult);
+
+impl ExecutionResultHandle {
+    fn parse<T>(self) -> TonlibResult<T>
+    where
+        T: BoxedDeserialize,
+    {
+        let mut buf = std::io::Cursor::new(self.as_slice());
+        Deserializer::new(&mut buf)
+            .read_boxed()
+            .map_err(|e| TonlibError::DeserializationError { reason: e.to_string() })
+    }
+
+    fn as_slice(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.0.data_ptr as *const u8, self.0.data_len as usize) }
+    }
+}
+
+impl Drop for ExecutionResultHandle {
+    fn drop(&mut self) {
+        unsafe { trs_delete_response(&self.0) };
+    }
+}
+
+#[repr(C)]
+struct ExecutionResult {
+    data_ptr: *const c_void,
+    data_len: c_ulong,
+}
+
+type Callback = unsafe extern "C" fn(*mut c_void, ExecutionResult);
+
+#[link(name = "tonlib-sys-cpp-bundled", kind = "static")]
+extern "C" {
+    fn trs_create_client() -> *mut c_void;
+    fn trs_delete_client(client: *mut c_void);
+
+    fn trs_run(client: *mut c_void, query_ptr: *const c_void, query_len: u64, callback: Callback, context: *mut c_void);
+    fn trs_execute(query_ptr: *const c_void, query_len: u64) -> ExecutionResult;
+    fn trs_delete_response(response: *const ExecutionResult);
+}
+
 fn make_callback<A, F: FnMut(A)>(f: Box<F>) -> (unsafe extern "C" fn(*mut c_void, A), *mut c_void)
 where
     F: Send + Sync,
@@ -133,6 +133,16 @@ mod tests {
     }"#;
 
     #[test]
+    fn test_static_function() {
+        let result = TonlibClient::execute(&ton::rpc::UnpackAccountAddress {
+            account_address: "-1:3333333333333333333333333333333333333333333333333333333333333333".to_string(),
+        })
+        .unwrap();
+
+        println!("{:?}", result);
+    }
+
+    #[test]
     fn test_client() {
         let _ = TonlibClient::execute(&ton::rpc::SetLogVerbosityLevel { new_verbosity_level: 7 }).unwrap();
 
@@ -161,16 +171,5 @@ mod tests {
             .unwrap();
 
         let _ = rx.recv().unwrap();
-    }
-
-    #[test]
-    fn test_static_function() {
-        let result = TonlibClient::execute(&ton::rpc::GenerateKeyPair {
-            word_count: 24,
-            password: ton_api::secure::SecureString::new(b"Hello world".to_vec()),
-            entropy: ton_api::secure::SecureString::new(b"Entropy".to_vec()),
-        });
-
-        println!("{:?}", result);
     }
 }

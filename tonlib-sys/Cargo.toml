@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 ton_api = { git = "https://github.com/broxus/ton-labs-tl.git" }
-thiserror = "1.0"
+failure = "0.1.8"
 
 [build-dependencies]
 cc = "1.0.62"

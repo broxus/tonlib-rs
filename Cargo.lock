@@ -669,26 +669,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "thiserror"
-version = "1.0.22"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e9ae34b84616eedaaf1e9dd6026dbe00dcafa92aa0c8077cb69df1fcfe5e53e"
-dependencies = [
- "thiserror-impl",
-]
-
-[[package]]
-name = "thiserror-impl"
-version = "1.0.22"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ba20f23e85b10754cd195504aebf6a27e2e6cbe28c17778a0c930724628dd56"
-dependencies = [
- "proc-macro2 1.0.24",
- "quote 1.0.7",
- "syn 1.0.48",
-]
-
-[[package]]
 name = "ton_api"
 version = "0.0.1"
 source = "git+https://github.com/broxus/ton-labs-tl.git#dd69767512e24baa96b77600999aa1af07b0b96c"
@@ -771,7 +751,7 @@ version = "0.1.0"
 dependencies = [
  "cc",
  "cmake",
- "thiserror",
+ "failure",
  "ton_api",
 ]
 

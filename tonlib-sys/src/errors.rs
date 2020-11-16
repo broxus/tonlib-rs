@@ -1,12 +1,12 @@
-use thiserror::Error;
+use failure::Fail;
 
-#[derive(Debug, Clone, Error)]
+#[derive(Debug, Fail)]
 pub enum TonlibError {
-    #[error("failed to serialize query. {reason}")]
+    #[fail(display = "failed to serialize query. {}", reason)]
     SerializationError { reason: String },
-    #[error("failed to deserialize response. {reason}")]
+    #[fail(display = "failed to deserialize response. {}", reason)]
     DeserializationError { reason: String },
-    #[error("tonlib error. {code} - {message}")]
+    #[fail(display = "tonlib error. {} - {}", code, message)]
     ExecutionError { code: u32, message: String },
 }
 
