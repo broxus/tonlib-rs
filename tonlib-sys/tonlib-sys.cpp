@@ -126,13 +126,12 @@ void trs_delete_client(void *client_ptr) {
   delete reinterpret_cast<const trs::Client *>(client_ptr);
 }
 
-auto trs_run(void *client_ptr, const void *query_ptr, uint64_t query_len)
-    -> ExecutionResult {
+void trs_run(void *client_ptr, const void *query_ptr, uint64_t query_len) {
   auto *client = reinterpret_cast<trs::Client *>(client_ptr);
   auto query = fetch_tl_function(query_ptr, query_len);
 
   // TODO
-  return ExecutionResult{nullptr, 0};
+  // return ExecutionResult{nullptr, 0};
 }
 
 auto trs_execute(const void *query_ptr, uint64_t query_len) -> ExecutionResult {

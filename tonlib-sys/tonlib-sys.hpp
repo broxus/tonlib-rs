@@ -36,8 +36,7 @@ struct ExecutionResult {
 
 auto trs_create_client() -> void *;
 void trs_delete_client(void *client_ptr);
-auto trs_run(void *client_ptr, const void *query_ptr, uint64_t query_len)
-    -> ExecutionResult;
+void trs_run(void *client_ptr, const void *query_ptr, uint64_t query_len);
 auto trs_execute(const void *query_ptr, uint64_t query_len) -> ExecutionResult;
 void trs_delete_response(const ExecutionResult *response);
 }

@@ -1,8 +1,10 @@
 pub mod errors;
 
+use std::convert::{TryFrom, TryInto};
 use std::ffi::c_void;
 use std::os::raw::c_ulong;
-use ton_api::{Deserializer, Function, Serializer};
+
+use ton_api::{BoxedDeserialize, Deserializer, Function, Serializer};
 
 use crate::errors::*;
 
@@ -17,7 +19,7 @@ extern "C" {
     fn trs_create_client() -> *mut c_void;
     fn trs_delete_client(client: *mut c_void);
 
-    fn trs_run(client: *mut c_void, query_ptr: *const c_void, query_len: u64) -> ExecutionResult;
+    fn trs_run(client: *mut c_void, query_ptr: *const c_void, query_len: u64);
     fn trs_execute(query_ptr: *const c_void, query_len: u64) -> ExecutionResult;
     fn trs_delete_response(response: *const ExecutionResult);
 }
@@ -25,6 +27,16 @@ extern "C" {
 struct ExecutionResultHandle(ExecutionResult);
 
 impl ExecutionResultHandle {
+    fn parse<T>(self) -> TonlibResult<T>
+    where
+        T: BoxedDeserialize,
+    {
+        let mut buf = std::io::Cursor::new(self.as_slice());
+        Deserializer::new(&mut buf)
+            .read_boxed()
+            .map_err(|e| TonlibError::DeserializationError { reason: e.to_string() })
+    }
+
     fn as_slice(&self) -> &[u8] {
         unsafe { std::slice::from_raw_parts(self.0.data_ptr as *const u8, self.0.data_len as usize) }
     }
@@ -36,7 +48,7 @@ impl Drop for ExecutionResultHandle {
     }
 }
 
-struct TonlibClient(*mut c_void);
+pub struct TonlibClient(*mut c_void);
 
 impl TonlibClient {
     pub fn execute<T>(function: &T) -> TonlibResult<T::Reply>
@@ -47,12 +59,8 @@ impl TonlibClient {
         Serializer::new(&mut buf)
             .write_boxed(function)
             .map_err(|e| TonlibError::SerializationError { reason: e.to_string() })?;
-        let result = ExecutionResultHandle(unsafe { trs_execute(buf.as_ptr() as *const c_void, buf.len() as u64) });
 
-        let mut buf = std::io::Cursor::new(result.as_slice());
-        Deserializer::new(&mut buf)
-            .read_boxed()
-            .map_err(|e| TonlibError::DeserializationError { reason: e.to_string() })
+        ExecutionResultHandle(unsafe { trs_execute(buf.as_ptr() as *const c_void, buf.len() as u64) }).parse()
     }
 }
 

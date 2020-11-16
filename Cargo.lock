@@ -769,6 +769,7 @@ dependencies = [
 name = "tonlib-sys"
 version = "0.1.0"
 dependencies = [
+ "cc",
  "cmake",
  "thiserror",
  "ton_api",

@@ -1,3 +1,7 @@
+use std::env;
+use std::fs;
+use std::path::PathBuf;
+
 use cmake::Config;
 
 fn main() {
@@ -12,7 +16,12 @@ fn main() {
         .build_target("tonlib-sys-cpp-bundled")
         .build();
 
-    println!("cargo:rustc-link-lib=dylib=stdc++");
     println!("cargo:rustc-link-search=native={}", dst.display());
     println!("cargo:rustc-link-lib=static=tonlib-sys-cpp-bundled");
+    println!("cargo:rustc-link-lib=dylib=crypto");
+
+    let out_dir = env::var_os("OUT_DIR").expect("missing OUT_DIR");
+    let path = PathBuf::from(out_dir).join("dummy.cc");
+    fs::write(&path, "int rust_link_cplusplus;\n").unwrap();
+    cc::Build::new().cpp(true).file(&path).compile("link-cplusplus");
 }
