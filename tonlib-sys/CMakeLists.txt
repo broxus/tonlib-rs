@@ -6,7 +6,7 @@ project(${PROJECT_NAME} LANGUAGES CXX)
 
 add_subdirectory(ton EXCLUDE_FROM_ALL)
 
-add_library(${PROJECT_NAME} STATIC tonlib-sys.cpp tonlib-sys.hpp)
+add_library(${PROJECT_NAME} STATIC src/tonlib-sys.cpp src/tonlib-sys.hpp)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
         CXX_STANDARD 17

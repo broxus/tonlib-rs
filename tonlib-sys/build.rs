@@ -5,6 +5,9 @@ use std::path::PathBuf;
 use cmake::Config;
 
 fn main() {
+    println!("cargo:rerun-if-changed=src/tonlib-sys.cpp");
+    println!("cargo:rerun-if-changed=src/tonlib-sys.hpp");
+
     let dst = Config::new("./")
         .define("TON_USE_ROCKSDB", "OFF")
         .define("TON_USE_ABSEIL", "OFF")

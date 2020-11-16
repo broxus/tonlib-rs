@@ -6,6 +6,8 @@ pub enum TonlibError {
     SerializationError { reason: String },
     #[error("failed to deserialize response. {reason}")]
     DeserializationError { reason: String },
+    #[error("tonlib error. {code} - {message}")]
+    ExecutionError { code: u32, message: String },
 }
 
 pub type TonlibResult<T> = Result<T, TonlibError>;

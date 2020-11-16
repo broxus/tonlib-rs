@@ -38,6 +38,11 @@ auto store_tl_object(tonlib_api::object_ptr<tonlib_api::Object> &&object)
 
   return ExecutionResult{ptr, len};
 }
+
+auto store_tl_object(td::Status &&status) {
+  return store_tl_object(tonlib::status_to_tonlib_api(status.move_as_error()));
+}
+
 } // namespace
 
 namespace trs {
@@ -126,24 +131,33 @@ void trs_delete_client(void *client_ptr) {
   delete reinterpret_cast<const trs::Client *>(client_ptr);
 }
 
-void trs_run(void *client_ptr, const void *query_ptr, uint64_t query_len) {
+void trs_run(void *client_ptr, const void *query_ptr, uint64_t query_len,
+             Callback callback, void *context) {
   auto *client = reinterpret_cast<trs::Client *>(client_ptr);
   auto query = fetch_tl_function(query_ptr, query_len);
+  if (query.is_error()) {
+    return callback(context, store_tl_object(query.move_as_error()));
+  }
 
-  // TODO
-  // return ExecutionResult{nullptr, 0};
+  auto P = td::PromiseCreator::lambda(
+      [callback, context](td::Result<trs::Client::Response> R) mutable {
+        if (R.is_error()) {
+          callback(context, store_tl_object(R.move_as_error()));
+        } else {
+          callback(context, store_tl_object(R.move_as_ok()));
+        }
+      });
+  client->send(query.move_as_ok(), std::move(P));
 }
 
 auto trs_execute(const void *query_ptr, uint64_t query_len) -> ExecutionResult {
   auto query = fetch_tl_function(query_ptr, query_len);
-
-  tonlib_api::object_ptr<tonlib_api::Object> R;
   if (query.is_error()) {
-    R = tonlib::status_to_tonlib_api(query.move_as_error());
+    return store_tl_object(query.move_as_error());
   } else {
-    R = tonlib::TonlibClient::static_request(query.move_as_ok());
+    return store_tl_object(
+        tonlib::TonlibClient::static_request(query.move_as_ok()));
   }
-  return store_tl_object(std::move(R));
 }
 
 void trs_delete_response(const ExecutionResult *response) {
