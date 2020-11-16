@@ -3,7 +3,8 @@ pub mod errors;
 use std::ffi::c_void;
 use std::os::raw::c_ulong;
 
-use ton_api::{BoxedDeserialize, Deserializer, Function, Serializer};
+use lazy_static::lazy_static;
+use ton_api::{ton, BoxedDeserialize, Deserializer, Function, Serializer};
 
 use crate::errors::*;
 
@@ -83,9 +84,24 @@ impl ExecutionResultHandle {
         T: BoxedDeserialize,
     {
         let mut buf = std::io::Cursor::new(self.as_slice());
-        Deserializer::new(&mut buf)
-            .read_boxed()
-            .map_err(|e| TonlibError::DeserializationError { reason: e.to_string() })
+
+        let mut deserializer = Deserializer::new(&mut buf);
+        let constructor = deserializer
+            .read_constructor()
+            .map_err(|e| TonlibError::DeserializationError { reason: e.to_string() })?;
+
+        if constructor.0 == *ERROR_CONSTRUCTOR {
+            ton::Error::deserialize_boxed(constructor, &mut deserializer)
+                .map_err(|e| TonlibError::DeserializationError { reason: e.to_string() })
+                .and_then(|error| {
+                    Err(TonlibError::ExecutionError {
+                        code: *error.code(),
+                        message: error.message().clone(),
+                    })
+                })
+        } else {
+            T::deserialize_boxed(constructor, &mut deserializer).map_err(|e| TonlibError::DeserializationError { reason: e.to_string() })
+        }
     }
 
     fn as_slice(&self) -> &[u8] {
@@ -126,6 +142,10 @@ where
         Box::from_raw(data as *mut F)(arg)
     }
     (callback::<A, F>, ptr as *mut c_void)
+}
+
+lazy_static! {
+    static ref ERROR_CONSTRUCTOR: u32 = ton::Error::possible_constructors().first().unwrap().0;
 }
 
 #[cfg(test)]

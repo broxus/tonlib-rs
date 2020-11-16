@@ -961,6 +961,7 @@ dependencies = [
  "cc",
  "cmake",
  "failure",
+ "lazy_static",
  "ton_api",
 ]
 
