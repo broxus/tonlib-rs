@@ -951,7 +951,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "tonlib-rs"
+name = "tonlib"
 version = "0.1.0"
 dependencies = [
  "failure",
