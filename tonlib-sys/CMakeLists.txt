@@ -59,6 +59,8 @@ function(bundle_static_library tgt_name)
     set(bundled_tgt_full_name
             ${CMAKE_INSTALL_PREFIX}/${CMAKE_STATIC_LIBRARY_PREFIX}${bundled_tgt_name}${CMAKE_STATIC_LIBRARY_SUFFIX})
 
+    file(REMOVE ${bundled_tgt_full_name})
+
     if (CMAKE_CXX_COMPILER_ID MATCHES "^(Clang|GNU)$")
         file(WRITE ${CMAKE_BINARY_DIR}/${bundled_tgt_name}.ar.in
                 "CREATE ${bundled_tgt_full_name}\n")

@@ -32,8 +32,6 @@ auto store_tl_object(tonlib_api::object_ptr<tonlib_api::Object> &&object)
   auto len = l;
 
   auto *ptr = new uint8_t[len];
-  LOG(WARNING) << "allocating response [" << reinterpret_cast<intptr_t>(ptr)
-               << ", " << len << "]";
   td::TlStorerUnsafe Y(ptr);
   Y.store_binary(T->get_id());
   T->store(Y);
@@ -126,23 +124,15 @@ Client &Client::operator=(Client &&other) noexcept = default;
 extern "C" {
 
 auto trs_create_client() -> void * {
-  LOG(WARNING) << "trs_create_client";
   return static_cast<void *>(new trs::Client{});
 }
 
 void trs_delete_client(void *client_ptr) {
-  LOG(WARNING) << "trs_delete_client(" << reinterpret_cast<intptr_t>(client_ptr)
-               << ")";
   delete reinterpret_cast<const trs::Client *>(client_ptr);
 }
 
 void trs_run(void *client_ptr, const void *query_ptr, uint64_t query_len,
              Callback callback, void *context) {
-  LOG(WARNING) << "trs_run(" << reinterpret_cast<intptr_t>(client_ptr) << ", "
-               << reinterpret_cast<intptr_t>(query_ptr) << ", " << query_len
-               << ", " << reinterpret_cast<intptr_t>(callback) << ", "
-               << reinterpret_cast<intptr_t>(context) << ")";
-
   auto *client = reinterpret_cast<trs::Client *>(client_ptr);
   auto query = fetch_tl_function(query_ptr, query_len);
   if (query.is_error()) {
@@ -161,8 +151,6 @@ void trs_run(void *client_ptr, const void *query_ptr, uint64_t query_len,
 }
 
 auto trs_execute(const void *query_ptr, uint64_t query_len) -> ExecutionResult {
-  LOG(WARNING) << "trs_execute(" << reinterpret_cast<intptr_t>(query_ptr)
-               << ", " << query_len << ")";
   auto query = fetch_tl_function(query_ptr, query_len);
   if (query.is_error()) {
     return store_tl_object(query.move_as_error());
@@ -173,8 +161,6 @@ auto trs_execute(const void *query_ptr, uint64_t query_len) -> ExecutionResult {
 }
 
 void trs_delete_response(const void *response_ptr) {
-  LOG(WARNING) << "trs_delete_response("
-               << reinterpret_cast<intptr_t>(response_ptr) << ")";
   delete[] reinterpret_cast<const char *>(response_ptr);
 }
 }

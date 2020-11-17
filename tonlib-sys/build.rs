@@ -5,8 +5,9 @@ use std::path::PathBuf;
 use cmake::Config;
 
 fn main() {
-    println!("cargo:rerun-if-changed=src/tonlib-sys.cpp");
-    println!("cargo:rerun-if-changed=src/tonlib-sys.hpp");
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("missing CARGO_MANIFEST_DIR");
+    println!("cargo:rerun-if-changed={}/src/tonlib-sys.cpp", manifest_dir);
+    println!("cargo:rerun-if-changed={}/src/tonlib-sys.hpp", manifest_dir);
 
     let dst = Config::new("./")
         .define("TON_USE_ROCKSDB", "OFF")
