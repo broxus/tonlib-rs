@@ -32,6 +32,9 @@ impl TonlibClient {
     }
 }
 
+unsafe impl Send for TonlibClient {}
+unsafe impl Sync for TonlibClient {}
+
 impl Drop for TonlibClient {
     fn drop(&mut self) {
         unsafe { trs_delete_client(self.0) }

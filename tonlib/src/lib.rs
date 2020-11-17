@@ -3,20 +3,13 @@ pub mod utils;
 use std::future::Future;
 use std::mem::MaybeUninit;
 use std::pin::Pin;
-use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
-use futures::TryFutureExt;
-use tokio::sync::{watch, Mutex, MutexGuard, RwLock, TryLockError};
-use ton_api::ton::ton::blockidext::BlockIdExt;
+use tokio::sync::Mutex;
 use ton_api::{ton, Function, IntoBoxed};
-use ton_block::{AccountState, MsgAddrStd};
 pub use tonlib_sys::errors::*;
 use tonlib_sys::AsQuery;
-
-use crate::utils::*;
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -199,10 +192,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
     use super::*;
-    use ton_block::MsgAddress;
 
     const MAINNET_CONFIG: &str = r#"{
       "liteservers": [
