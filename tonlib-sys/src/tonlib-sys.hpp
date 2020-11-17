@@ -41,5 +41,5 @@ void trs_delete_client(void *client_ptr);
 void trs_run(void *client_ptr, const void *query_ptr, uint64_t query_len,
              Callback callback, void *context);
 auto trs_execute(const void *query_ptr, uint64_t query_len) -> ExecutionResult;
-void trs_delete_response(const ExecutionResult *response);
+void trs_delete_response(const void *response_ptr);
 }

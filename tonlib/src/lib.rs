@@ -1,9 +1,5 @@
 pub mod utils;
 
-use std::future::Future;
-use std::mem::MaybeUninit;
-use std::pin::Pin;
-use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
 use tokio::sync::Mutex;
@@ -109,7 +105,6 @@ impl TonlibClient {
         let last_block = self.last_block.get_last_block(self).await?;
 
         let query = ton::rpc::lite_server::GetRawAccount { id: last_block, account };
-
         Ok(self.run(&query).await?.only())
     }
 
@@ -134,59 +129,17 @@ impl TonlibClient {
     where
         T: Function,
     {
-        let mut result = MaybeUninit::uninit();
-        TonlibFuture {
-            client: &self.client,
-            function: Some(f),
-            result: Some(&mut result),
-        }
-        .await;
-        unsafe { result.assume_init() }
-    }
-}
+        let query = f.as_query()?;
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.client.run(
+            &query,
+            Box::new(move |res| {
+                let _ = tx.send(res);
+            }),
+        );
 
-struct TonlibFuture<'f, T>
-where
-    T: Function,
-{
-    client: &'f tonlib_sys::TonlibClient,
-    function: Option<&'f T>,
-    result: Option<&'f mut MaybeUninit<TonlibResult<T::Reply>>>,
-}
-
-impl<'f, T> Future for TonlibFuture<'f, T>
-where
-    T: Function,
-{
-    type Output = ();
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.get_mut();
-
-        match (this.function.take(), this.result.take()) {
-            (Some(f), Some(value)) => {
-                let waker = cx.waker().clone();
-
-                match f.as_query() {
-                    Ok(query) => {
-                        this.client.run::<T, _>(
-                            &query,
-                            Box::new(move |result| {
-                                *value = MaybeUninit::new(result);
-                                waker.wake();
-                            }),
-                        );
-                        Poll::Pending
-                    }
-                    Err(e) => {
-                        *value = MaybeUninit::new(Err(e));
-                        Poll::Ready(())
-                    }
-                }
-            }
-            (None, None) => Poll::Ready(()),
-            _ => unreachable!(),
-        }
+        rx.await
+            .unwrap_or_else(|e| Err(TonlibError::DeserializationError { reason: e.to_string() }))
     }
 }
 

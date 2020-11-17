@@ -114,7 +114,7 @@ impl ExecutionResultHandle {
 
 impl Drop for ExecutionResultHandle {
     fn drop(&mut self) {
-        unsafe { trs_delete_response(&self.0) };
+        unsafe { trs_delete_response(self.0.data_ptr) };
     }
 }
 
@@ -133,18 +133,18 @@ extern "C" {
 
     fn trs_run(client: *mut c_void, query_ptr: *const c_void, query_len: u64, callback: Callback, context: *mut c_void);
     fn trs_execute(query_ptr: *const c_void, query_len: u64) -> ExecutionResult;
-    fn trs_delete_response(response: *const ExecutionResult);
+    fn trs_delete_response(response_ptr: *const c_void);
 }
 
-fn make_callback<A, F: FnOnce(A)>(f: Box<F>) -> (unsafe extern "C" fn(*mut c_void, A), *mut c_void)
+fn make_callback<F: FnOnce(ExecutionResult)>(f: Box<F>) -> (unsafe extern "C" fn(*mut c_void, ExecutionResult), *mut c_void)
 where
     F: Send + Sync,
 {
     let ptr = Box::into_raw(f);
-    unsafe extern "C" fn callback<A, F: FnOnce(A)>(data: *mut c_void, arg: A) {
+    unsafe extern "C" fn callback<F: FnOnce(ExecutionResult)>(data: *mut c_void, arg: ExecutionResult) {
         Box::from_raw(data as *mut F)(arg)
     }
-    (callback::<A, F>, ptr as *mut c_void)
+    (callback::<F>, ptr as *mut c_void)
 }
 
 lazy_static! {
@@ -201,7 +201,6 @@ mod tests {
         let client = TonlibClient::new();
 
         let (tx, rx) = std::sync::mpsc::sync_channel(1);
-
         client.run(
             &ton::rpc::Init {
                 options: ton::options::Options {
@@ -221,7 +220,14 @@ mod tests {
                 tx.send(res).unwrap();
             },
         );
+        let _ = rx.recv().unwrap();
 
+        let (tx, rx) = std::sync::mpsc::sync_channel(1);
+
+        client.run(&ton::rpc::lite_server::GetMasterchainInfo.as_query().unwrap(), move |res| {
+            println!("Result: {:?}", res);
+            tx.send(res).unwrap();
+        });
         let _ = rx.recv().unwrap();
     }
 }
