@@ -120,6 +120,23 @@ impl TonlibClient {
         Ok(self.run(&query).await?.only())
     }
 
+    pub async fn get_transactions(
+        &self,
+        account: ton::lite_server::accountid::AccountId,
+        count: u8,
+        lt: i64,
+        hash: ton::bytes,
+    ) -> TonlibResult<Vec<ton::lite_server::rawtransaction::RawTransaction>> {
+        let query = ton::rpc::lite_server::GetRawTransactions {
+            count: count as i32,
+            account,
+            lt,
+            hash,
+        };
+
+        Ok(self.run(&query).await?.only().items.0)
+    }
+
     async fn run<T>(&self, f: &T) -> TonlibResult<T::Reply>
     where
         T: Function,
@@ -231,9 +248,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_init() {
+    async fn test_transactions() {
         let client = make_client().await;
 
         let account_state = client.get_account_state(elector_addr()).await.unwrap();
+        println!("Account state: {:?}", account_state);
+
+        let account_state = client
+            .get_transactions(elector_addr(), 16, account_state.last_trans_lt, account_state.last_trans_hash)
+            .await
+            .unwrap();
+        println!("Transactions: {:?}", account_state);
     }
 }
