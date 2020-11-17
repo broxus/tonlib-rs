@@ -1,6 +1,6 @@
 use failure::Fail;
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Clone, Fail)]
 pub enum TonlibError {
     #[fail(display = "failed to serialize query. {}", reason)]
     SerializationError { reason: String },

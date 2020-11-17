@@ -127,9 +127,9 @@ dependencies = [
 
 [[package]]
 name = "cmake"
-version = "0.1.44"
+version = "0.1.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e56268c17a6248366d66d4a47a3381369d068cce8409bb1716ed77ea32163bb"
+checksum = "eb6210b637171dfba4cda12e579ac6dc73f5165ad56133e5d72ef3131f320855"
 dependencies = [
  "cc",
 ]
@@ -245,6 +245,12 @@ name = "fake-simd"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e88a8acf291dafb59c2d96e8f59828f3838bb1a70398823ade51a84de6a6deed"
+
+[[package]]
+name = "fnv"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
 name = "fuchsia-cprng"
@@ -857,6 +863,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6d7ad61edd59bfcc7e80dababf0f4aed2e6d5e0ba1659356ae889752dfc12ff"
 dependencies = [
  "bytes",
+ "fnv",
  "num_cpus",
  "pin-project-lite",
  "slab",
@@ -877,7 +884,7 @@ dependencies = [
 [[package]]
 name = "ton_api"
 version = "0.0.1"
-source = "git+https://github.com/broxus/ton-labs-tl.git#dd69767512e24baa96b77600999aa1af07b0b96c"
+source = "git+https://github.com/broxus/ton-labs-tl.git#b94e0158dc35094a99b9cbd4096df994c63cb760"
 dependencies = [
  "byteorder",
  "erased-serde",
@@ -917,7 +924,7 @@ dependencies = [
 [[package]]
 name = "ton_tl_codegen"
 version = "0.0.1"
-source = "git+https://github.com/broxus/ton-labs-tl.git#dd69767512e24baa96b77600999aa1af07b0b96c"
+source = "git+https://github.com/broxus/ton-labs-tl.git#b94e0158dc35094a99b9cbd4096df994c63cb760"
 dependencies = [
  "crc",
  "failure",
@@ -951,6 +958,8 @@ dependencies = [
  "futures",
  "tokio",
  "ton_api",
+ "ton_block",
+ "ton_types",
  "tonlib-sys",
 ]
 

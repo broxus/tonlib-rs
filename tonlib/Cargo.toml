@@ -6,9 +6,11 @@ edition = "2018"
 
 [dependencies]
 ton_api = { git = "https://github.com/broxus/ton-labs-tl.git" }
+ton_types = { git = "https://github.com/tonlabs/ton-labs-types.git" }
+ton_block = { git = "https://github.com/tonlabs/ton-labs-block.git" }
 failure = "0.1.8"
 futures = "0.3.8"
-tokio = { version = "0.2", features = ["rt-threaded", "macros"] }
+tokio = { version = "0.2", features = ["rt-threaded", "macros", "sync"] }
 
 [dependencies.tonlib-sys]
 path = "../tonlib-sys"
