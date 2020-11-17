@@ -7,62 +7,6 @@ use ton_api::{ton, Function, IntoBoxed};
 pub use tonlib_sys::errors::*;
 use tonlib_sys::AsQuery;
 
-#[derive(Debug, Clone)]
-pub struct Config {
-    pub network_config: String,
-    pub network_name: String,
-    pub verbosity: u8,
-    pub keystore: KeystoreType,
-    pub last_block_threshold: Duration,
-}
-
-#[derive(Debug, Clone)]
-pub enum KeystoreType {
-    InMemory,
-    FileSystem(String),
-}
-
-impl From<KeystoreType> for ton::KeyStoreType {
-    fn from(v: KeystoreType) -> Self {
-        match v {
-            KeystoreType::InMemory => ton::KeyStoreType::KeyStoreTypeInMemory,
-            KeystoreType::FileSystem(directory) => ton::keystoretype::KeyStoreTypeDirectory { directory }.into_boxed(),
-        }
-    }
-}
-
-struct LastBlock {
-    id: Mutex<Option<(TonlibResult<ton::ton::blockidext::BlockIdExt>, Instant)>>,
-    threshold: Duration,
-}
-
-impl LastBlock {
-    fn new(threshold: &Duration) -> Self {
-        Self {
-            id: Mutex::new(None),
-            threshold: threshold.clone(),
-        }
-    }
-
-    async fn get_last_block(&self, client: &TonlibClient) -> TonlibResult<ton::ton::blockidext::BlockIdExt> {
-        let mut lock = self.id.lock().await;
-        let now = Instant::now();
-
-        let new_id = match &mut *lock {
-            Some((result, last)) if now.duration_since(*last) >= self.threshold => {
-                return result.clone();
-            }
-            _ => client
-                .run(&ton::rpc::lite_server::GetMasterchainInfo)
-                .await
-                .map(|result| result.only().last.only()),
-        };
-
-        *lock = Some((new_id.clone(), now));
-        new_id
-    }
-}
-
 pub struct TonlibClient {
     client: tonlib_sys::TonlibClient,
     last_block: LastBlock,
@@ -125,6 +69,12 @@ impl TonlibClient {
         Ok(self.run(&query).await?.only().items.0)
     }
 
+    pub async fn send_message(&self, data: Vec<u8>) -> TonlibResult<()> {
+        let query = ton::rpc::raw::SendMessage { body: data.into() };
+        let _ = self.run(&query).await?;
+        Ok(())
+    }
+
     async fn run<T>(&self, f: &T) -> TonlibResult<T::Reply>
     where
         T: Function,
@@ -140,6 +90,62 @@ impl TonlibClient {
 
         rx.await
             .unwrap_or_else(|e| Err(TonlibError::DeserializationError { reason: e.to_string() }))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub network_config: String,
+    pub network_name: String,
+    pub verbosity: u8,
+    pub keystore: KeystoreType,
+    pub last_block_threshold: Duration,
+}
+
+#[derive(Debug, Clone)]
+pub enum KeystoreType {
+    InMemory,
+    FileSystem(String),
+}
+
+impl From<KeystoreType> for ton::KeyStoreType {
+    fn from(v: KeystoreType) -> Self {
+        match v {
+            KeystoreType::InMemory => ton::KeyStoreType::KeyStoreTypeInMemory,
+            KeystoreType::FileSystem(directory) => ton::keystoretype::KeyStoreTypeDirectory { directory }.into_boxed(),
+        }
+    }
+}
+
+struct LastBlock {
+    id: Mutex<Option<(TonlibResult<ton::ton::blockidext::BlockIdExt>, Instant)>>,
+    threshold: Duration,
+}
+
+impl LastBlock {
+    fn new(threshold: &Duration) -> Self {
+        Self {
+            id: Mutex::new(None),
+            threshold: threshold.clone(),
+        }
+    }
+
+    async fn get_last_block(&self, client: &TonlibClient) -> TonlibResult<ton::ton::blockidext::BlockIdExt> {
+        let mut lock = self.id.lock().await;
+        let now = Instant::now();
+
+        let new_id = match &mut *lock {
+            Some((result, last)) if now.duration_since(*last) >= self.threshold => {
+                return result.clone();
+            }
+            _ => client
+                .run(&ton::rpc::lite_server::GetMasterchainInfo)
+                .await
+                .map(|result| result.only().last.only()),
+        };
+
+        *lock = Some((new_id.clone(), now));
+        new_id
     }
 }
 
