@@ -17,6 +17,7 @@ fn main() {
         .define("TON_USE_GDB", "OFF")
         .define("TON_USE_STACKTRACE", "OFF")
         .define("TONLIB_FULL_API", "ON")
+        .build_arg(format!("-j{}", num_cpus::get()))
         .build_target("tonlib-sys-cpp-bundled")
         .build();
 

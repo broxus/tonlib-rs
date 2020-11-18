@@ -12,3 +12,4 @@ lazy_static = "1.4.0"
 [build-dependencies]
 cc = "1.0.62"
 cmake = "0.1"
+num_cpus = "1.13.0"

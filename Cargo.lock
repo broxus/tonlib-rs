@@ -904,7 +904,7 @@ dependencies = [
 [[package]]
 name = "ton_block"
 version = "1.0.0"
-source = "git+https://github.com/tonlabs/ton-labs-block.git#5885beb6c4f4700e1eeaa5d4315e880c902c9781"
+source = "git+https://github.com/tonlabs/ton-labs-block.git#e5a9e52866925a7227f8d6fe941531b5e065e0eb"
 dependencies = [
  "base64",
  "clear_on_drop",
@@ -971,6 +971,7 @@ dependencies = [
  "cmake",
  "failure",
  "lazy_static",
+ "num_cpus",
  "ton_api",
 ]
 
