@@ -884,7 +884,7 @@ dependencies = [
 [[package]]
 name = "ton_api"
 version = "0.0.1"
-source = "git+https://github.com/broxus/ton-labs-tl.git#b94e0158dc35094a99b9cbd4096df994c63cb760"
+source = "git+https://github.com/broxus/ton-labs-tl.git#88216563a9ef091b5761f361d8882d3979720c1c"
 dependencies = [
  "byteorder",
  "erased-serde",
@@ -924,7 +924,7 @@ dependencies = [
 [[package]]
 name = "ton_tl_codegen"
 version = "0.0.1"
-source = "git+https://github.com/broxus/ton-labs-tl.git#b94e0158dc35094a99b9cbd4096df994c63cb760"
+source = "git+https://github.com/broxus/ton-labs-tl.git#88216563a9ef091b5761f361d8882d3979720c1c"
 dependencies = [
  "crc",
  "failure",
