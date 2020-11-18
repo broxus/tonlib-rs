@@ -135,7 +135,7 @@ impl LastBlock {
         let now = Instant::now();
 
         let new_id = match &mut *lock {
-            Some((result, last)) if now.duration_since(*last) >= self.threshold => {
+            Some((result, last)) if now.duration_since(*last) < self.threshold => {
                 return result.clone();
             }
             _ => client
