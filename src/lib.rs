@@ -45,6 +45,9 @@ impl TonlibClient {
         };
 
         let response = self.run(query).await?.only();
+        if response.state.0.is_empty() {
+            return Err(TonlibError::AccountNotFound.into());
+        }
 
         match Account::construct_from_bytes(&response.state.0)? {
             Account::Account(info) => {
