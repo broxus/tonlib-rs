@@ -1,3 +1,0 @@
-[submodule "tonlib-sys/ton"]
-	path = tonlib-sys/ton
-	url = https://github.com/broxus/ton.git
