@@ -58,10 +58,7 @@ impl TonlibClient {
 
                 let ss = ShardStateUnsplit::construct_from(&mut proof_root.into())?;
 
-                let shard_info = ss
-                    .read_accounts()?
-                    .get(&account.address())?
-                    .ok_or_else(|| TonlibError::AccountNotFound)?;
+                let shard_info = ss.read_accounts()?.get(&account.address())?.ok_or(TonlibError::AccountNotFound)?;
 
                 Ok((
                     AccountStats {
