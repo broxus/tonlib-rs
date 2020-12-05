@@ -8,12 +8,10 @@ edition = "2018"
 ton_api = { git = "https://github.com/tonlabs/ton-labs-tl.git" }
 ton_types = { git = "https://github.com/tonlabs/ton-labs-types.git" }
 ton_block = { git = "https://github.com/tonlabs/ton-labs-block.git" }
-adnl = { git = "https://github.com/tonlabs/ton-labs-adnl.git", features = [ "client", "trace" ] }
+adnl = { git = "https://github.com/tonlabs/ton-labs-adnl.git", features = [ "client" ] }
 base64 = "0.13"
 failure = "0.1"
 futures = "0.3"
-log = "0.4.11"
-env_logger = "0.8.2"
 serde = "1.0"
 serde_json = "1.0"
 tokio = { version = "0.2", features = ["rt-threaded", "macros", "sync"] }

@@ -8,11 +8,8 @@ use std::time::{Duration, Instant};
 use adnl::client::{AdnlClient, AdnlClientConfig};
 use tokio::sync::Mutex;
 use ton_api::{ton, Function};
-use ton_block::{
-    Account, AccountStuff, Deserializable, HashmapAugType, InRefValue, MsgAddrStd, MsgAddressInt, ShardStateUnsplit, Transaction,
-    Transactions,
-};
-use ton_types::{HashmapType, Result, UInt256, UsageTree};
+use ton_block::{Account, AccountStuff, Deserializable, HashmapAugType, MsgAddrStd, MsgAddressInt, ShardStateUnsplit, Transaction};
+use ton_types::{Result, UInt256};
 
 use crate::errors::*;
 
@@ -26,14 +23,12 @@ impl TonlibClient {
         let adnl_config = AdnlClientConfig::try_from(config)?;
         let client = AdnlClient::connect(&adnl_config).await?;
 
-        Ok(TonlibClient {
+        let tonlib = TonlibClient {
             client: Mutex::new(client),
             last_block: LastBlock::new(&config.last_block_threshold),
-        })
-    }
+        };
 
-    pub async fn ping(&self) -> Result<u64> {
-        self.client.lock().await.ping().await
+        Ok(tonlib)
     }
 
     pub async fn get_account_state<T>(&self, account: &T) -> Result<(AccountStats, AccountStuff)>
@@ -49,12 +44,19 @@ impl TonlibClient {
             },
         };
 
-        let mut response = self.run(query).await?.only();
-        match Account::construct_from_bytes(&mut response.state.0)? {
+        let response = self.run(query).await?.only();
+
+        match Account::construct_from_bytes(&response.state.0)? {
             Account::Account(info) => {
-                let state_root = ton_types::deserialize_tree_of_cells(&mut std::io::Cursor::new(&response.state.0))?;
-                let usage_tree = UsageTree::with_root(state_root);
-                let ss = ShardStateUnsplit::construct_from(&mut usage_tree.root_slice())?;
+                let q_roots = ton_types::deserialize_cells_tree(&mut std::io::Cursor::new(&response.proof.0))?;
+                if q_roots.len() != 2 {
+                    return Err(TonlibError::InvalidAccountState.into());
+                }
+
+                let merkle_proof = ton_block::MerkleProof::construct_from_cell(q_roots[0].clone())?;
+                let proof_root = merkle_proof.proof.virtualize(1);
+
+                let ss = ShardStateUnsplit::construct_from(&mut proof_root.into())?;
 
                 let shard_info = ss
                     .read_accounts()?
@@ -88,15 +90,14 @@ impl TonlibClient {
             lt: lt as i64,
             hash: ton::int256(hash.into()),
         };
-        let transactions = self
-            .run(query)
-            .await
-            .and_then(|result| Transactions::construct_from_bytes(result.transactions()))?;
+        let transactions = self.run(query).await.and_then(|result| {
+            let data = result.only().transactions.0;
+            ton_types::deserialize_cells_tree(&mut std::io::Cursor::new(data))
+        })?;
 
-        let mut result = Vec::with_capacity(count as usize);
-        for data in transactions.iter() {
-            let transaction = InRefValue::<Transaction>::construct_from(&mut data?.1)?;
-            result.push(transaction.inner());
+        let mut result = Vec::with_capacity(transactions.len());
+        for data in transactions.into_iter().rev() {
+            result.push(Transaction::construct_from_cell(data)?);
         }
         Ok(result)
     }
@@ -110,7 +111,8 @@ impl TonlibClient {
     where
         T: Function,
     {
-        let query = ton::TLObject::new(f);
+        let query_bytes = f.boxed_serialized_bytes()?;
+        let query = ton::TLObject::new(ton::rpc::lite_server::Query { data: query_bytes.into() });
 
         let mut client = self.client.lock().await;
         let result = client.query(&query).await?;
@@ -176,6 +178,7 @@ impl TryFrom<&Config> for AdnlClientConfig {
         let json = serde_json::json!({
             "client_key": serde_json::Value::Null,
             "server_address": value.server_address.to_string(),
+            "client_key": serde_json::Value::Null,
             "server_key": {
                 "type_id": adnl::common::KeyOption::KEY_ED25519,
                 "pub_key": value.server_key.clone(),
@@ -196,7 +199,7 @@ impl LastBlock {
     fn new(threshold: &Duration) -> Self {
         Self {
             id: Mutex::new(None),
-            threshold: threshold.clone(),
+            threshold: *threshold,
         }
     }
 
@@ -224,31 +227,7 @@ impl LastBlock {
 mod tests {
     use super::*;
 
-    use std::net::{Ipv4Addr, SocketAddrV4};
     use std::str::FromStr;
-
-    const MAINNET_CONFIG: &str = r#"{
-      "liteservers": [
-        {
-          "ip": 916349379,
-          "port": 3031,
-          "id": {
-            "@type": "pub.ed25519",
-            "key": "uNRRL+6enQjuiZ/s6Z+vO7yxUUR7uxdfzIy+RxkECrc="
-          }
-        }
-      ],
-      "validator": {
-        "@type": "validator.config.global",
-        "zero_state": {
-          "workchain": -1,
-          "shard": -9223372036854775808,
-          "seqno": 0,
-          "root_hash": "WP/KGheNr/cF3lQhblQzyb0ufYUAcNM004mXhHq56EU=",
-          "file_hash": "0nC4eylStbp9qnCq8KjDYb789NjS25L5ZA1UQwcIOOQ="
-        }
-      }
-    }"#;
 
     fn elector_addr() -> MsgAddressInt {
         MsgAddressInt::from_str("-1:3333333333333333333333333333333333333333333333333333333333333333").unwrap()
@@ -266,21 +245,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_transactions() {
-        std::env::set_var("RUST_LOG", "trace");
-        env_logger::init();
-
         let client = make_client().await;
-        //
-        // let ping_result = client.ping().await.unwrap();
-        // println!("Ping: {}", ping_result);
 
         let (stats, account_state) = client.get_account_state(&elector_addr()).await.unwrap();
         println!("Account state: {:?}, {:?}", stats, account_state);
 
-        let account_state = client
+        let transactions = client
             .get_transactions(&elector_addr(), 16, stats.last_trans_lt, stats.last_trans_hash)
             .await
             .unwrap();
-        println!("Transactions: {:?}", account_state);
+
+        println!("Transactions: {:?}", transactions);
     }
 }
