@@ -77,7 +77,7 @@ impl TonlibClient {
         }
     }
 
-    pub async fn get_transactions<T>(&self, account: &T, count: u8, lt: u64, hash: UInt256) -> Result<Vec<Transaction>>
+    pub async fn get_transactions<T>(&self, account: &T, count: u8, lt: u64, hash: UInt256) -> Result<Vec<(UInt256, Transaction)>>
     where
         T: AsStdAddr,
     {
@@ -97,7 +97,8 @@ impl TonlibClient {
 
         let mut result = Vec::with_capacity(transactions.len());
         for data in transactions.into_iter().rev() {
-            result.push(Transaction::construct_from_cell(data)?);
+            let hash = data.repr_hash();
+            result.push((hash, Transaction::construct_from_cell(data)?));
         }
         Ok(result)
     }
