@@ -4,9 +4,9 @@ use ton_types::UInt256;
 use crate::errors::TonlibError;
 
 pub fn unpack_address(addr: &str) -> Result<(bool, i8, UInt256), failure::Error> {
-    let bytes = base64::decode(addr).map_err(|_| TonlibError::UnknownError)?;
+    let bytes = base64::decode(addr).map_err(|_| TonlibError::InvalidAddress)?;
     if bytes.len() != 36 {
-        return Err(TonlibError::UnknownError.into());
+        return Err(TonlibError::InvalidAddress.into());
     }
 
     let bounceable = (bytes[0] & 0x40u8) == 0u8;

@@ -1,4 +1,4 @@
-pub mod errors;
+mod errors;
 pub mod utils;
 
 use std::convert::TryFrom;
