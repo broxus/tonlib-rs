@@ -92,6 +92,10 @@ impl TonlibClient {
         };
         let transactions = self.run(query).await.and_then(|result| {
             let data = result.only().transactions.0;
+            if data.is_empty() {
+                return Ok(Vec::new());
+            }
+
             ton_types::deserialize_cells_tree(&mut std::io::Cursor::new(data))
         })?;
 
@@ -234,6 +238,10 @@ mod tests {
         MsgAddressInt::from_str("-1:3333333333333333333333333333333333333333333333333333333333333333").unwrap()
     }
 
+    fn unknown_addr() -> MsgAddressInt {
+        MsgAddressInt::from_str("-1:3333333333333333333333333333333333333333333333333333333333333334").unwrap()
+    }
+
     async fn make_client() -> TonlibClient {
         TonlibClient::new(&Config {
             server_address: "54.158.97.195:3031".parse().unwrap(),
@@ -257,5 +265,13 @@ mod tests {
             .unwrap();
 
         println!("Transactions: {:?}", transactions);
+    }
+
+    #[tokio::test]
+    async fn test_unknown() {
+        let client = make_client().await;
+
+        let transactions = client.get_transactions(&unknown_addr(), 16, 0, UInt256::default()).await.unwrap();
+        assert!(transactions.is_empty());
     }
 }
