@@ -5,10 +5,10 @@ authors = ["Ivan Kalinin <i.kalinin@dexpa.io>"]
 edition = "2018"
 
 [dependencies]
-ton_api = { git = "https://github.com/tonlabs/ton-labs-tl.git" }
+ton_api = { git = "https://github.com/broxus/ton-labs-tl.git", branch = "original" }
 ton_types = { git = "https://github.com/tonlabs/ton-labs-types.git" }
 ton_block = { git = "https://github.com/tonlabs/ton-labs-block.git" }
-adnl = { git = "https://github.com/tonlabs/ton-labs-adnl.git", features = [ "client" ] }
+adnl = { git = "https://github.com/broxus/ton-labs-adnl.git", features = [ "client" ] }
 base64 = "0.13"
 failure = "0.1"
 futures = "0.3"
