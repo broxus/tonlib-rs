@@ -234,6 +234,8 @@ mod tests {
 
     use std::str::FromStr;
 
+    use futures::future::Future;
+
     fn elector_addr() -> MsgAddressInt {
         MsgAddressInt::from_str("-1:3333333333333333333333333333333333333333333333333333333333333333").unwrap()
     }
@@ -252,26 +254,36 @@ mod tests {
         .unwrap()
     }
 
-    #[tokio::test]
-    async fn test_transactions() {
-        let client = make_client().await;
-
-        let (stats, account_state) = client.get_account_state(&elector_addr()).await.unwrap();
-        println!("Account state: {:?}, {:?}", stats, account_state);
-
-        let transactions = client
-            .get_transactions(&elector_addr(), 16, stats.last_trans_lt, stats.last_trans_hash)
-            .await
-            .unwrap();
-
-        println!("Transactions: {:?}", transactions);
+    fn run_test<T>(fut: impl Future<Output = Result<T>>) {
+        let mut rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(fut).unwrap();
     }
 
-    #[tokio::test]
-    async fn test_unknown() {
-        let client = make_client().await;
+    #[test]
+    fn test_transactions() {
+        run_test(async {
+            let client = make_client().await;
 
-        let transactions = client.get_transactions(&unknown_addr(), 16, 0, UInt256::default()).await.unwrap();
-        assert!(transactions.is_empty());
+            let (stats, account_state) = client.get_account_state(&elector_addr()).await?;
+            println!("Account state: {:?}, {:?}", stats, account_state);
+
+            let transactions = client
+                .get_transactions(&elector_addr(), 16, stats.last_trans_lt, stats.last_trans_hash)
+                .await?;
+
+            println!("Transactions: {:?}", transactions);
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn test_unknown() {
+        run_test(async {
+            let client = make_client().await;
+
+            let transactions = client.get_transactions(&unknown_addr(), 16, 0, UInt256::default()).await?;
+            assert!(transactions.is_empty());
+            Ok(())
+        });
     }
 }
