@@ -124,7 +124,7 @@ impl TonlibClient {
 
         match result.downcast::<T::Reply>() {
             Ok(reply) => Ok(reply),
-            Err(error) => match error.downcast::<ton::Error>() {
+            Err(error) => match error.downcast::<ton::lite_server::Error>() {
                 Ok(error) => Err(TonlibError::ExecutionError {
                     code: *error.code(),
                     message: error.message().to_string(),

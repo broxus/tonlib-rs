@@ -5,7 +5,7 @@ authors = ["Ivan Kalinin <i.kalinin@dexpa.io>"]
 edition = "2018"
 
 [dependencies]
-adnl = { git = "https://github.com/broxus/ton-labs-adnl.git", default-features = false, features = ["client"] }
+adnl = { git = "https://github.com/broxus/ton-labs-adnl.git", default-features = false }
 ton_api = { git = "https://github.com/broxus/ton-labs-tl.git", branch = "original" }
 ton_types = { git = "https://github.com/tonlabs/ton-labs-types.git" }
 ton_block = { git = "https://github.com/tonlabs/ton-labs-block.git" }
