@@ -14,6 +14,7 @@ use ton_types::{Result, UInt256};
 use crate::errors::*;
 
 pub struct TonlibClient {
+    adnl_config: AdnlClientConfig,
     client: Mutex<AdnlClient>,
     last_block: LastBlock,
 }
@@ -24,6 +25,7 @@ impl TonlibClient {
         let client = AdnlClient::connect(&adnl_config).await?;
 
         let tonlib = TonlibClient {
+            adnl_config,
             client: Mutex::new(client),
             last_block: LastBlock::new(&config.last_block_threshold),
         };
@@ -120,7 +122,21 @@ impl TonlibClient {
         let query = ton::TLObject::new(ton::rpc::lite_server::Query { data: query_bytes.into() });
 
         let mut client = self.client.lock().await;
-        let result = client.query(&query).await?;
+        let result = match client.query(&query).await {
+            Ok(result) => result,
+            Err(e) => match client.ping().await {
+                Ok(_) => return Err(e),
+                Err(ping_error) => {
+                    log::error!("ADNL error: {:?} then unsuccessful ping: {}", e, ping_error);
+
+                    log::warn!("Reconnecting");
+                    *client = AdnlClient::connect(&self.adnl_config).await?;
+
+                    log::warn!("Retrying request");
+                    client.query(&query).await?
+                }
+            },
+        };
 
         match result.downcast::<T::Reply>() {
             Ok(reply) => Ok(reply),
