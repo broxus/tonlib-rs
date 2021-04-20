@@ -68,7 +68,7 @@ impl TonlibClient {
                 Ok((
                     AccountStats {
                         last_trans_lt: shard_info.last_trans_lt(),
-                        last_trans_hash: shard_info.last_trans_hash().clone(),
+                        last_trans_hash: *shard_info.last_trans_hash(),
                         gen_lt: ss.gen_lt(),
                         gen_utime: ss.gen_time(),
                     },
