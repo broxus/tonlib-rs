@@ -6,7 +6,7 @@ use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
 use adnl::client::{AdnlClient, AdnlClientConfig};
-use tokio::sync::Mutex;
+use futures::lock::Mutex;
 use ton_api::{ton, Function};
 use ton_block::{Account, AccountStuff, Deserializable, HashmapAugType, MsgAddrStd, MsgAddressInt, ShardStateUnsplit, Transaction};
 use ton_types::{Result, UInt256};
