@@ -1,17 +1,17 @@
-mod errors;
-pub mod utils;
-
 use std::convert::TryFrom;
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
 use adnl::client::{AdnlClient, AdnlClientConfig};
-use futures::lock::Mutex;
+use tokio::sync::Mutex;
 use ton_api::{ton, Function};
 use ton_block::{Account, AccountStuff, Deserializable, HashmapAugType, MsgAddrStd, MsgAddressInt, ShardStateUnsplit, Transaction};
 use ton_types::{Result, UInt256};
 
 use crate::errors::*;
+
+mod errors;
+pub mod utils;
 
 pub struct TonlibClient {
     adnl_config: AdnlClientConfig,
@@ -246,11 +246,11 @@ impl LastBlock {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use std::str::FromStr;
 
     use futures::future::Future;
+
+    use super::*;
 
     fn elector_addr() -> MsgAddressInt {
         MsgAddressInt::from_str("-1:3333333333333333333333333333333333333333333333333333333333333333").unwrap()
