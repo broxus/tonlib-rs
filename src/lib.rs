@@ -277,7 +277,7 @@ mod tests {
     }
 
     fn run_test<T>(fut: impl Future<Output = Result<T>>) {
-        let mut rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(fut).unwrap();
     }
 
