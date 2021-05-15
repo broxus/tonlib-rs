@@ -114,6 +114,12 @@ impl TonlibClient {
         Ok(())
     }
 
+    pub async fn check_connection(&self) -> Result<()> {
+        let mut client = self.client.lock().await;
+        client.ping().await?;
+        Ok(())
+    }
+
     async fn run<T>(&self, f: T) -> Result<T::Reply>
     where
         T: Function,
@@ -273,6 +279,16 @@ mod tests {
     fn run_test<T>(fut: impl Future<Output = Result<T>>) {
         let mut rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(fut).unwrap();
+    }
+
+    #[test]
+    fn test_ping() {
+        run_test(async {
+            let client = make_client().await;
+
+            client.check_connection().await.unwrap();
+            Ok(())
+        });
     }
 
     #[test]
