@@ -148,7 +148,7 @@ impl TonlibClient {
         let transactions = ton_types::deserialize_cells_tree(&mut std::io::Cursor::new(transactions)).map_err(anyhow::Error::msg)?;
 
         let mut result = Vec::with_capacity(transactions.len());
-        for data in transactions.into_iter().rev() {
+        for data in transactions.into_iter() {
             let hash = data.repr_hash();
             result.push((hash, Transaction::construct_from_cell(data).map_err(anyhow::Error::msg)?));
         }
@@ -276,6 +276,8 @@ mod tests {
             let transactions = client
                 .get_transactions(&elector_addr(), 16, stats.last_trans_lt, stats.last_trans_hash)
                 .await?;
+
+            assert!(transactions.windows(2).all(|t| t[0].1.lt > t[1].1.lt));
 
             println!("Transactions: {:?}", transactions);
             Ok(())
