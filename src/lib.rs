@@ -41,7 +41,7 @@ impl TonlibClient {
         })
     }
 
-    pub async fn get_account_state<T>(&self, account: &T) -> TonlibResult<(AccountStats, AccountStuff)>
+    pub async fn get_account_state<T>(&self, account: &T) -> Result<(AccountStats, AccountStuff)>
     where
         T: AsStdAddr,
     {
@@ -89,7 +89,7 @@ impl TonlibClient {
                 let q_roots = ton_types::deserialize_cells_tree(&mut std::io::Cursor::new(&response.proof.0))
                     .map_err(|_| TonlibError::InvalidAccountStateProof)?;
                 if q_roots.len() != 2 {
-                    return Err(TonlibError::InvalidAccountStateProof);
+                    return Err(TonlibError::InvalidAccountStateProof.into());
                 }
 
                 let merkle_proof =
@@ -115,7 +115,7 @@ impl TonlibClient {
                     info,
                 ))
             }
-            _ => Err(TonlibError::AccountNotFound),
+            _ => Err(TonlibError::AccountNotFound.into()),
         }
     }
 
