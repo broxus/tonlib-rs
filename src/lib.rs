@@ -1,69 +1,109 @@
+mod connection;
 mod errors;
+mod last_block;
+mod pool;
 pub mod utils;
 
 use std::convert::TryFrom;
-use std::net::SocketAddr;
-use std::time::{Duration, Instant};
+use std::net::SocketAddrV4;
+use std::time::Duration;
 
-use adnl::client::{AdnlClient, AdnlClientConfig};
-use tokio::sync::Mutex;
-use ton_api::{ton, Function};
-use ton_block::{Account, AccountStuff, Deserializable, HashmapAugType, MsgAddrStd, MsgAddressInt, ShardStateUnsplit, Transaction};
-use ton_types::{Result, UInt256};
+use anyhow::Result;
+use bb8::{Pool, PooledConnection};
+use tiny_adnl::AdnlTcpClientConfig;
+use ton_api::ton;
+use ton_block::{AccountStuff, Deserializable, MsgAddrStd, MsgAddressInt, Transaction};
+use ton_types::UInt256;
 
+use crate::connection::*;
 use crate::errors::*;
+use crate::last_block::*;
+use crate::pool::*;
 
 pub struct TonlibClient {
-    adnl_config: AdnlClientConfig,
-    client: Mutex<AdnlClient>,
+    pool: Pool<AdnlManageConnection>,
     last_block: LastBlock,
 }
 
 impl TonlibClient {
     pub async fn new(config: &Config) -> Result<Self> {
-        let adnl_config = AdnlClientConfig::try_from(config)?;
-        let client = AdnlClient::connect(&adnl_config).await?;
+        let builder = Pool::builder();
+        let pool = builder
+            .max_size(config.max_connection_count)
+            .min_idle(config.min_idle_connection_count)
+            .max_lifetime(None)
+            .build(AdnlManageConnection::new(config)?)
+            .await?;
 
-        let tonlib = TonlibClient {
-            adnl_config,
-            client: Mutex::new(client),
+        Ok(Self {
+            pool,
             last_block: LastBlock::new(&config.last_block_threshold),
-        };
-
-        Ok(tonlib)
+        })
     }
 
-    pub async fn get_account_state<T>(&self, account: &T) -> Result<(AccountStats, AccountStuff)>
+    pub async fn get_account_state<T>(&self, account: &T) -> TonlibResult<(AccountStats, AccountStuff)>
     where
         T: AsStdAddr,
     {
-        let id = self.last_block.get_last_block(self).await?;
-        let query = ton::rpc::lite_server::GetAccountState {
-            id,
+        use ton_block::HashmapAugType;
+
+        let mut connection = self.acquire_connection().await?;
+        let last_block_id = self.last_block.get_last_block(&mut connection).await?;
+
+        let mut account_state_query = ton::rpc::lite_server::GetAccountState {
+            id: last_block_id.clone(),
             account: ton::lite_server::accountid::AccountId {
                 workchain: account.workchain_id(),
                 id: ton::int256(account.address().into()),
             },
         };
 
-        let response = self.run(query).await?.only();
-        if response.state.0.is_empty() {
-            return Err(TonlibError::AccountNotFound.into());
-        }
+        let response = {
+            match query(&mut connection, &account_state_query).await? {
+                QueryReply::Data(data) => data,
+                QueryReply::NotReady => {
+                    let previous_block_ids = self
+                        .last_block
+                        .last_cached_blocks()
+                        .await
+                        .skip_while(|block| block.seqno < last_block_id.seqno);
 
-        match Account::construct_from_bytes(&response.state.0)? {
-            Account::Account(info) => {
-                let q_roots = ton_types::deserialize_cells_tree(&mut std::io::Cursor::new(&response.proof.0))?;
+                    let mut result = QueryReply::NotReady;
+                    for block_id in previous_block_ids {
+                        account_state_query.id = block_id;
+                        result = query(&mut connection, &account_state_query).await?;
+
+                        if result.has_data() {
+                            break;
+                        }
+                    }
+
+                    result.try_into_data()?
+                }
+            }
+        }
+        .only();
+
+        match ton_block::Account::construct_from_bytes(&response.state.0) {
+            Ok(ton_block::Account::Account(info)) => {
+                let q_roots = ton_types::deserialize_cells_tree(&mut std::io::Cursor::new(&response.proof.0))
+                    .map_err(|_| TonlibError::InvalidAccountStateProof)?;
                 if q_roots.len() != 2 {
-                    return Err(TonlibError::InvalidAccountState.into());
+                    return Err(TonlibError::InvalidAccountStateProof);
                 }
 
-                let merkle_proof = ton_block::MerkleProof::construct_from_cell(q_roots[0].clone())?;
+                let merkle_proof =
+                    ton_block::MerkleProof::construct_from_cell(q_roots[1].clone()).map_err(|_| TonlibError::InvalidAccountStateProof)?;
                 let proof_root = merkle_proof.proof.virtualize(1);
 
-                let ss = ShardStateUnsplit::construct_from(&mut proof_root.into())?;
+                let ss = ton_block::ShardStateUnsplit::construct_from(&mut proof_root.into())
+                    .map_err(|_| TonlibError::InvalidAccountStateProof)?;
 
-                let shard_info = ss.read_accounts()?.get(&account.address())?.ok_or(TonlibError::AccountNotFound)?;
+                let shard_info = ss
+                    .read_accounts()
+                    .and_then(|accounts| accounts.get(&account.address()))
+                    .map_err(|_| TonlibError::InvalidAccountStateProof)?
+                    .ok_or(TonlibError::AccountNotFound)?;
 
                 Ok((
                     AccountStats {
@@ -75,7 +115,7 @@ impl TonlibClient {
                     info,
                 ))
             }
-            _ => Err(TonlibError::AccountNotFound.into()),
+            _ => Err(TonlibError::AccountNotFound),
         }
     }
 
@@ -83,78 +123,49 @@ impl TonlibClient {
     where
         T: AsStdAddr,
     {
-        let query = ton::rpc::lite_server::GetTransactions {
-            count: count as i32,
-            account: ton::lite_server::accountid::AccountId {
-                workchain: account.workchain_id(),
-                id: ton::int256(account.address().into()),
-            },
-            lt: lt as i64,
-            hash: ton::int256(hash.into()),
-        };
-        let transactions = self.run(query).await.and_then(|result| {
-            let data = result.only().transactions.0;
-            if data.is_empty() {
-                return Ok(Vec::new());
-            }
+        let mut connection = self.acquire_connection().await?;
 
-            ton_types::deserialize_cells_tree(&mut std::io::Cursor::new(data))
-        })?;
+        let response = query(
+            &mut connection,
+            &ton::rpc::lite_server::GetTransactions {
+                count: count as i32,
+                account: ton::lite_server::accountid::AccountId {
+                    workchain: account.workchain_id(),
+                    id: ton::int256(account.address().into()),
+                },
+                lt: lt as i64,
+                hash: ton::int256(hash.into()),
+            },
+        )
+        .await?
+        .try_into_data()?;
+
+        let transactions = response.only().transactions.0;
+        if transactions.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let transactions = ton_types::deserialize_cells_tree(&mut std::io::Cursor::new(transactions)).map_err(anyhow::Error::msg)?;
 
         let mut result = Vec::with_capacity(transactions.len());
         for data in transactions.into_iter().rev() {
             let hash = data.repr_hash();
-            result.push((hash, Transaction::construct_from_cell(data)?));
+            result.push((hash, Transaction::construct_from_cell(data).map_err(anyhow::Error::msg)?));
         }
         Ok(result)
     }
 
     pub async fn send_message(&self, data: Vec<u8>) -> Result<()> {
-        let _ = self.run(ton::rpc::lite_server::SendMessage { body: data.into() }).await?;
+        let mut connection = self.acquire_connection().await?;
+
+        query(&mut connection, &ton::rpc::lite_server::SendMessage { body: ton::bytes(data) })
+            .await?
+            .try_into_data()?;
         Ok(())
     }
 
-    pub async fn check_connection(&self) -> Result<()> {
-        let mut client = self.client.lock().await;
-        client.ping().await?;
-        Ok(())
-    }
-
-    async fn run<T>(&self, f: T) -> Result<T::Reply>
-    where
-        T: Function,
-    {
-        let query_bytes = f.boxed_serialized_bytes()?;
-        let query = ton::TLObject::new(ton::rpc::lite_server::Query { data: query_bytes.into() });
-
-        let mut client = self.client.lock().await;
-        let result = match client.query(&query).await {
-            Ok(result) => result,
-            Err(e) => match client.ping().await {
-                Ok(_) => return Err(e),
-                Err(ping_error) => {
-                    log::error!("ADNL error: {:?} then unsuccessful ping: {}", e, ping_error);
-
-                    log::warn!("Reconnecting");
-                    *client = AdnlClient::connect(&self.adnl_config).await?;
-
-                    log::warn!("Retrying request");
-                    client.query(&query).await?
-                }
-            },
-        };
-
-        match result.downcast::<T::Reply>() {
-            Ok(reply) => Ok(reply),
-            Err(error) => match error.downcast::<ton::lite_server::Error>() {
-                Ok(error) => Err(TonlibError::ExecutionError {
-                    code: *error.code(),
-                    message: error.message().to_string(),
-                }
-                .into()),
-                Err(_unknown) => Err(TonlibError::UnknownError.into()),
-            },
-        }
+    async fn acquire_connection(&self) -> TonlibResult<PooledConnection<'_, AdnlManageConnection>> {
+        acquire_connection(&self.pool).await
     }
 }
 
@@ -193,60 +204,28 @@ impl AsStdAddr for MsgAddressInt {
 
 #[derive(Debug, Clone)]
 pub struct Config {
-    pub server_address: SocketAddr,
+    pub server_address: SocketAddrV4,
     pub server_key: String,
+    pub max_connection_count: u32,
+    pub min_idle_connection_count: Option<u32>,
+    pub socket_read_timeout: Duration,
+    pub socket_send_timeout: Duration,
     pub last_block_threshold: Duration,
+    pub ping_timeout: Duration,
 }
 
-impl TryFrom<&Config> for AdnlClientConfig {
-    type Error = failure::Error;
+impl TryFrom<&Config> for AdnlTcpClientConfig {
+    type Error = anyhow::Error;
 
-    fn try_from(value: &Config) -> Result<Self> {
-        let json = serde_json::json!({
-            "client_key": serde_json::Value::Null,
-            "server_address": value.server_address.to_string(),
-            "client_key": serde_json::Value::Null,
-            "server_key": {
-                "type_id": adnl::common::KeyOption::KEY_ED25519,
-                "pub_key": value.server_key.clone(),
-                "pvt_key": serde_json::Value::Null,
-            },
-            "timeouts": adnl::common::Timeouts::default()
-        });
-        AdnlClientConfig::from_json(&json.to_string())
-    }
-}
+    fn try_from(c: &Config) -> Result<Self> {
+        let server_key = base64::decode(&c.server_key)?;
 
-struct LastBlock {
-    id: Mutex<Option<(TonlibResult<ton::ton_node::blockidext::BlockIdExt>, Instant)>>,
-    threshold: Duration,
-}
-
-impl LastBlock {
-    fn new(threshold: &Duration) -> Self {
-        Self {
-            id: Mutex::new(None),
-            threshold: *threshold,
-        }
-    }
-
-    async fn get_last_block(&self, client: &TonlibClient) -> TonlibResult<ton::ton_node::blockidext::BlockIdExt> {
-        let mut lock = self.id.lock().await;
-        let now = Instant::now();
-
-        let new_id = match &mut *lock {
-            Some((result, last)) if now.duration_since(*last) < self.threshold => {
-                return result.clone();
-            }
-            _ => client
-                .run(ton::rpc::lite_server::GetMasterchainInfo)
-                .await
-                .map(|result| result.only().last)
-                .map_err(|e| TonlibError::AdnlError(e.to_string())),
-        };
-
-        *lock = Some((new_id.clone(), now));
-        new_id
+        Ok(AdnlTcpClientConfig {
+            server_address: c.server_address,
+            server_key: ed25519_dalek::PublicKey::from_bytes(&server_key)?,
+            socket_read_timeout: c.socket_read_timeout,
+            socket_send_timeout: c.socket_send_timeout,
+        })
     }
 }
 
@@ -270,6 +249,11 @@ mod tests {
         TonlibClient::new(&Config {
             server_address: "54.158.97.195:3031".parse().unwrap(),
             server_key: "uNRRL+6enQjuiZ/s6Z+vO7yxUUR7uxdfzIy+RxkECrc=".to_owned(),
+            max_connection_count: 1,
+            min_idle_connection_count: Some(1),
+            socket_read_timeout: Duration::from_secs(5),
+            socket_send_timeout: Duration::from_secs(5),
+            ping_timeout: Duration::from_secs(10),
             last_block_threshold: Duration::from_secs(1),
         })
         .await
@@ -279,16 +263,6 @@ mod tests {
     fn run_test<T>(fut: impl Future<Output = Result<T>>) {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(fut).unwrap();
-    }
-
-    #[test]
-    fn test_ping() {
-        run_test(async {
-            let client = make_client().await;
-
-            client.check_connection().await.unwrap();
-            Ok(())
-        });
     }
 
     #[test]

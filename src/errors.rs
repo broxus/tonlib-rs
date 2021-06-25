@@ -1,19 +1,25 @@
-use failure::Fail;
+use ton_api::ton;
 
-#[derive(Debug, Clone, Fail)]
+#[derive(thiserror::Error, Debug, Clone)]
 pub enum TonlibError {
-    #[fail(display = "invalid address")]
+    #[error("invalid address")]
     InvalidAddress,
-    #[fail(display = "account not found")]
+    #[error("account not found")]
     AccountNotFound,
-    #[fail(display = "adnl error. {}", 0)]
-    AdnlError(String),
-    #[fail(display = "failed to parse account state")]
-    InvalidAccountState,
-    #[fail(display = "liteserver error. {} - {}", code, message)]
-    ExecutionError { code: i32, message: String },
-    #[fail(display = "unknown error")]
-    UnknownError,
+    #[error("Connection error")]
+    ConnectionError,
+    #[error("Failed to serialize message")]
+    FailedToSerialize,
+    #[error("Lite server error. code: {}, reason: {}", .0.code(), .0.message())]
+    LiteServer(ton::lite_server::Error),
+    #[error("Invalid account state proof")]
+    InvalidAccountStateProof,
+    #[error("Invalid block")]
+    InvalidBlock,
+    #[error("Unknown")]
+    Unknown,
+    #[error("Not ready")]
+    NotReady,
 }
 
 pub type TonlibResult<T> = Result<T, TonlibError>;
