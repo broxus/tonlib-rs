@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
 use std::ops::DerefMut;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -57,7 +58,7 @@ impl bb8::ManageConnection for AdnlManageConnection {
         }
     }
 
-    fn has_broken(&self, _: &mut Self::Connection) -> bool {
-        false
+    fn has_broken(&self, connection: &mut Self::Connection) -> bool {
+        connection.has_broken.load(Ordering::Acquire)
     }
 }
